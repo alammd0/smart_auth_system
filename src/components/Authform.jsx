@@ -1,6 +1,11 @@
 import { AlertCircle, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import calculatePasswordStrength from "../utils/calculatePasswordStrength";
+import validateName from "../utils/validateName";
+import validateEmail from "../utils/validateEmail";
+import validatePassword from "../utils/validatePassword";
+import validateConfirmPassword from "../utils/validateConfirmPassword";
 
 export default function Authform() {
 
@@ -20,108 +25,6 @@ export default function Authform() {
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitSuccess, setSubmitSuccess] = useState(false);
-
-    // Validation Functions 
-
-    // 1. Name Validation 
-    const validateName = (name) => {
-        if(!name.trim()){
-            return "Name is required";
-        }
-
-        if(name.trim().length < 2){
-            return "Name must be at least 2 characters";
-        }
-
-        return undefined
-    }
-
-    // 2. Email Validation
-
-    const validateEmail = (email) => {
-        if(!email.trim()){
-            return "Email is required";
-        }
-
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-        if(!emailRegex.test(email)){
-            return 'Please enter a valid email';
-        }
-
-        return undefined
-    }
-
-
-    // 3. Password Validation
-    const validatePassword = (password) => {
-        if(!password.trim()){
-            return "Password is required";
-        }
-
-        if(password.trim().length < 8){
-            return "Password must be at least 8 characters";
-        }
-
-        if(!/[A-Z]/.test(password)){
-            return "Password must contain at least one uppercase letter";
-        }
-
-        if(!/[a-z]/.test(password)){
-            return "Password must contain at least one lowercase letter";
-        }
-
-        if(!/[0-9]/.test(password)){
-            return "Password must contain at least one number";
-        }
-
-        if(!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)){
-            return "Password must contain at least one special character";
-        }
-
-        return undefined
-    }
-
-    // 4. Confirm Password Validation
-
-    const validateConfirmPassword = (confirmPassword) => {
-        if(!confirmPassword.trim()){
-            return "Confirm Password is required";
-        }
-
-        if(confirmPassword.trim().length < 8){
-            return "Confirm Password must be at least 8 characters";
-        }
-
-        if(confirmPassword.trim() !== formData.password){
-            return "Confirm Password does not match Password";
-        }
-
-        return undefined
-    }
-
-    // 5. Calculate Password Strength
-
-    const calculatePasswordStrength = (password) => {
-        let strength  = 0; 
-        const check = [
-            password.length >= 8,
-            password.length >= 12,
-            /[A-Z]/.test(password),
-            /[a-z]/.test(password),
-            /[0-9]/.test(password),
-            /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password),
-        ]
-
-        strength = check.filter(Boolean).length;
-
-        if (strength <= 2) return { level: 25, label: 'Weak', color: 'bg-destructive' };
-        if (strength <= 3) return { level: 50, label: 'Fair', color: 'bg-yellow-500' };
-        if (strength <= 4) return { level: 75, label: 'Good', color: 'bg-blue-500' };
-        return { level: 100, label: 'Strong', color: 'bg-green-500' };
-
-    }
-
 
     const handleChange = (event) => {
         const { name, value } = event.target;
@@ -143,7 +46,7 @@ export default function Authform() {
                 error = validatePassword(value);
                 break;
             case 'confirmPassword':
-                error = validateConfirmPassword(value);
+                error = validateConfirmPassword(value, formData.password);
                 break;
             default:
                 break;
@@ -157,7 +60,7 @@ export default function Authform() {
             name : validateName(formData.name),
             email : validateEmail(formData.email),
             password : validatePassword(formData.password),
-            confirmPassword : validateConfirmPassword(formData.confirmPassword),
+            confirmPassword : validateConfirmPassword(formData.confirmPassword, formData.password),
         }
 
         console.log(newErrors);
@@ -285,95 +188,111 @@ export default function Authform() {
                             </div>
 
                             {/* Password */}
-                            <div className="flex flex-col gap-1 relative">
-                                <label className="text-foreground" htmlFor="password">Password <sup className="text-red-500">*</sup></label>
-                                <input  
-                                    id="password"
-                                    type={showPassword ? "text" : "password"}
-                                    placeholder="Create a strong password"
-                                    name="password"
-                                    value={formData.password}
-                                    onChange={handleChange}
-                                    disabled={submitSuccess}
-                                    className={`w-full border p-1 rounded-md border-gray-300 hover:shadow-sm hover:outline-1 ${errors.password ? ' border-red-500' : ''}`}
-                                />
+                            <div className="flex flex-col gap-1">
+                                <label className="text-foreground" htmlFor="password">
+                                    Password <sup className="text-red-500">*</sup>
+                                </label>
 
+                                {/* INPUT + ICON WRAPPER */}
+                                <div className="relative w-full">
+                                    <input
+                                        id="password"
+                                        type={showPassword ? "text" : "password"}
+                                        placeholder="Create a strong password"
+                                        name="password"
+                                        value={formData.password}
+                                        onChange={handleChange}
+                                        disabled={submitSuccess}
+                                        className={`w-full border rounded-md px-3 py-2 pr-10 focus:outline-none focus:ring-2 
+                                            ${ errors.password
+                                                ? "border-red-500 focus:ring-red-400"
+                                                : "border-gray-300 focus:ring-blue-400"
+                                            }`}
+                                    />
+
+                                    {/* ICON */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                    >
+                                        {!showPassword ? <EyeOff /> : <Eye />}
+                                    </button>
+                                </div>
+
+                                {/* PASSWORD STRENGTH */}
                                 {formData.password && (
-                                    <div className="space-y-2">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-xs text-muted-foreground">Password strength:</span>
-                                            <span className={`text-xs font-medium ${passwordStrength.color === 'bg-destructive'
-                                                ? 'text-destructive'
-                                                : passwordStrength.color === 'bg-yellow-500'
-                                                ? 'text-yellow-600'
-                                                : passwordStrength.color === 'bg-blue-500'
-                                                    ? 'text-blue-600'
-                                                    : 'text-green-600'
-                                            }`}>
-                                            {passwordStrength.label}
+                                    <div className="space-y-1">
+                                        <div className="flex items-center justify-between text-xs">
+                                            <span className="text-muted-foreground">Password strength:</span>
+                                            <span
+                                                className={`font-medium ${
+                                                    passwordStrength.color === "bg-destructive"
+                                                    ? "text-destructive"
+                                                    : passwordStrength.color === "bg-yellow-500"
+                                                    ? "text-yellow-600"
+                                                    : passwordStrength.color === "bg-blue-500"
+                                                    ? "text-blue-600"
+                                                    : "text-green-600"
+                                                }`}
+                                            >
+                                                {passwordStrength.label}
                                             </span>
                                         </div>
-                                        {/* <ProgressBa
-                                            value={passwordStrength.level}
-                                            className="h-2"
-                                        /> */}
                                     </div>
                                 )}
 
-                                {
-                                    errors.password && 
+                                {/* ERROR */}
+                                {errors.password && (
                                     <div className="flex items-center gap-2 text-sm text-destructive">
                                         <AlertCircle className="w-4 h-4" />
                                         {errors.password}
                                     </div>
-                                }
-
-                                <button type="button" 
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-3 top-3/5 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                                    {
-                                        !showPassword ? 
-                                            <EyeOff />
-                                        :
-                                            <Eye />
-                                    }
-                                </button>
+                                )}
                             </div>
 
                             {/* confirm Password */}
                             {
                                 !isLogin && <>
-                                    <div className="flex flex-col gap-1 relative">
-                                        <label className="text-foreground" htmlFor="confirmPassword">Confirm Password <sup className="text-red-500">*</sup></label>
-                                        <input 
-                                            id="confirmPassword"
-                                            type={showConfirmPassword ? "text" : "password"}
-                                            name="confirmPassword"
-                                            placeholder="Confirm your password"
-                                            value={formData.confirmPassword}
-                                            onChange={handleChange}
-                                            disabled={submitSuccess}
-                                            className={`w-full border p-1 rounded-md border-gray-300 hover:shadow-sm hover:outline-1 ${errors.confirmPassword ? ' border-red-500' : ''}`}
-                                        />
+                                    <div className="flex flex-col gap-1">
+                                        <label className="text-foreground" htmlFor="confirmPassword">
+                                            Confirm Password <sup className="text-red-500">*</sup>
+                                        </label>
 
-                                        {
-                                            errors.confirmPassword && 
+                                        <div className="relative w-full">
+                                            <input 
+                                                id="confirmPassword"
+                                                type={showConfirmPassword ? "text" : "password"}
+                                                placeholder="Confirm your password"
+                                                name="confirmPassword"
+                                                value={formData.confirmPassword}
+                                                onChange={handleChange}
+                                                disabled={submitSuccess}
+                                                className={`w-full border rounded-md px-3 py-2 pr-10 focus:outline-none focus:ring-2 
+                                                    ${ errors.confirmPassword
+                                                        ? "border-red-500 focus:ring-red-400"
+                                                        : "border-gray-300 focus:ring-blue-400"
+                                                }`}
+                                            />
+
+                                            {/* ICON */}
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                            >
+                                                {!showConfirmPassword ? <EyeOff /> : <Eye />}
+                                            </button>
+                                        </div>
+                                       
+
+                                        {/* ERROR */}
+                                        {errors.confirmPassword && (
                                             <div className="flex items-center gap-2 text-sm text-destructive">
                                                 <AlertCircle className="w-4 h-4" />
                                                 {errors.confirmPassword}
                                             </div>
-                                        }
-
-                                        <button type="button" 
-                                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                            className="absolute right-3 top-3/4 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                                            {
-                                                !showConfirmPassword ? 
-                                                    <EyeOff />
-                                                :
-                                                    <Eye />
-                                            }
-                                        </button>
+                                        )}
                                     </div>
                                 </>
                             }
