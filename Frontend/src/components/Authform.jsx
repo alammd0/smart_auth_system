@@ -1,16 +1,22 @@
 import { AlertCircle, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+
 import calculatePasswordStrength from "../utils/calculatePasswordStrength";
 import validateName from "../utils/validateName";
 import validateEmail from "../utils/validateEmail";
 import validatePassword from "../utils/validatePassword";
 import validateConfirmPassword from "../utils/validateConfirmPassword";
 
+
+
 export default function Authform() {
 
+    const API_URL = import.meta.env.VITE_API_URL;
     const location = useLocation();
     const isLogin = location.pathname === "/login";
+
+    const navigate = useNavigate();
 
     const [formData, setFormData] = useState({
         name : "",
@@ -26,93 +32,153 @@ export default function Authform() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitSuccess, setSubmitSuccess] = useState(false);
 
+    const getFieldError = (name, value, updatedFrom = formData) => {
+        switch (name) {
+            case "name":
+                return validateName(value);
+                break;
+            
+            case "email":
+                return validateEmail(value);
+                break;
+
+            case "password":
+                return validatePassword(value);
+                break;
+
+            case "confirmPassword":
+                return validateConfirmPassword(value, updatedFrom.password);
+                break;
+        
+            default:
+                return "";
+        }
+    } 
+
     const handleChange = (event) => {
         const { name, value } = event.target;
-        setFormData(prev => ({ 
-            ...prev, 
-            [name]: value 
-        }));
+
+        const updatedFrom = {
+            ...formData,
+            [name]: value
+        }
+
+        setFormData(updatedFrom);
 
         // real-time validation
-        let error;
-        switch(name){
-            case 'name':
-                error = validateName(value);
-                break;
-            case 'email':
-                error = validateEmail(value);
-                break;
-            case 'password':
-                error = validatePassword(value);
-                break;
-            case 'confirmPassword':
-                error = validateConfirmPassword(value, formData.password);
-                break;
-            default:
-                break;
-        }
+        const error = getFieldError(name, value, updatedFrom);
 
         setErrors(prev => ({ ...prev, [name]: error }));
     }
 
-    const validateFrom = () => {
-        const newErrors = {
-            name : validateName(formData.name),
-            email : validateEmail(formData.email),
-            password : validatePassword(formData.password),
-            confirmPassword : validateConfirmPassword(formData.confirmPassword, formData.password),
+    const validateForm = () => {
+
+         const newErrors = {
+            email: validateEmail(formData.email),
+            password: validatePassword(formData.password),
+        };
+
+        // only validate signup fields
+        if (!isLogin) {
+            newErrors.name = validateName(formData.name);
+            newErrors.confirmPassword = validateConfirmPassword(
+                formData.confirmPassword,
+                formData.password
+            );
         }
 
-        console.log(newErrors);
-
         setErrors(prev => ({ ...prev, ...newErrors }));
-
         return Object.values(newErrors).every(error => !error);
     }
 
     const handleSubmit = async (event) => {
         event.preventDefault();
 
-        if(!validateFrom()){
+        if(!validateForm()){
             return;
         }
-
         setIsSubmitting(true);
 
-        setTimeout(() => {
+        try {
+
+            const endPoint =  isLogin ? 
+                `${API_URL}/api/user/login` 
+                : 
+                `${API_URL}/api/user/create`;
+
+            const payload = isLogin ? {
+                                email: formData.email,
+                                password: formData.password,
+                            } : {
+                                name: formData.name,
+                                email: formData.email,
+                                password: formData.password
+                            };
+
+            const response = await fetch(endPoint, {
+                method : 'POST',
+                headers : {
+                    'Content-Type' : 'application/json'
+                },
+                body : JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+
+            console.log(data);
+
+            if(response.ok) {
+                setSubmitSuccess(true);
+
+                if (isLogin && data.token) {
+                    localStorage.setItem("token", data.token);
+                }
+
+                if (isLogin) {
+                    navigate("/dashboard");
+                }
+                else {
+                    navigate("/login");
+                }
+
+                setFormData({
+                    name : "",
+                    email : "",
+                    password : "",
+                    confirmPassword : "",
+                });
+
+                setErrors({});
+
+            } else {
+                throw new Error(data.message || "Something went wrong");
+            }
+
             setIsSubmitting(false);
-            setSubmitSuccess(true);
-        }, 2000);
+        }
+        catch(error) {
+            setErrors((prev) => ({
+                ...prev,
+                api: error.message,
+            }));
 
-        console.log(formData);
-
-        setTimeout(() => {
-            setFormData({
-                name : "",
-                email : "",
-                password : "",
-                confirmPassword : "",
-            })
-
-            setSubmitSuccess(false);
-            setErrors({});
-        }, 2000);
-
+            setIsSubmitting(false);
+        }
     }
 
     const passwordStrength = calculatePasswordStrength(formData.password);
+
     const isFormValid =
-            formData.name &&
             formData.email &&
             formData.password &&
-            formData.confirmPassword &&
-            !errors.name &&
             !errors.email &&
             !errors.password &&
-            !errors.confirmPassword;
-
-
-
+            (isLogin || (
+                formData.name &&
+                formData.confirmPassword &&
+                !errors.name &&
+                !errors.confirmPassword
+            ));
 
     return (
         <div className="h-screen w-full max-w-md mx-auto p-6 flex flex-col justify-center">
@@ -149,7 +215,7 @@ export default function Authform() {
                                             value={formData.name}
                                             onChange={handleChange}
                                             className={`w-full border p-1 rounded-md border-gray-300 hover:shadow-sm hover:outline-1 ${errors.name ? ' border-red-500' : ''}`}
-                                            disabled={submitSuccess}
+                                            disabled = {isSubmitting}
                                         />
                                         {
                                             errors.name && 
@@ -176,7 +242,7 @@ export default function Authform() {
                                         errors.email ? 'border-red-500' : ''
                                     }`}
 
-                                    disabled={submitSuccess}
+                                    disabled={isSubmitting}
                                  />
                                  {
                                     errors.email && 
@@ -202,7 +268,7 @@ export default function Authform() {
                                         name="password"
                                         value={formData.password}
                                         onChange={handleChange}
-                                        disabled={submitSuccess}
+                                        disabled={isSubmitting}
                                         className={`w-full border rounded-md px-3 py-2 pr-10 focus:outline-none focus:ring-2 
                                             ${ errors.password
                                                 ? "border-red-500 focus:ring-red-400"
@@ -267,7 +333,7 @@ export default function Authform() {
                                                 name="confirmPassword"
                                                 value={formData.confirmPassword}
                                                 onChange={handleChange}
-                                                disabled={submitSuccess}
+                                                disabled={isSubmitting}
                                                 className={`w-full border rounded-md px-3 py-2 pr-10 focus:outline-none focus:ring-2 
                                                     ${ errors.confirmPassword
                                                         ? "border-red-500 focus:ring-red-400"
@@ -297,21 +363,29 @@ export default function Authform() {
                                 </>
                             }
 
-                        {/* Here add Buttons for Signup and Login */}
-                        <div className="mt-5">
-                            {
-                                !isLogin ? <>
-                                    <button disabled={!isFormValid || isSubmitting || submitSuccess} type="submit" className="w-full bg-gray-600 p-2 rounded-md text-white hover:bg-gray-800">{
-                                            submitSuccess ? 'Submitting...' : 'Register'
-                                        }</button>
-                                </> : 
-                                <>
-                                    <button disabled={!isFormValid || isSubmitting || submitSuccess} type="submit" className="w-full bg-gray-600 p-2 rounded-md text-white hover:bg-gray-800">
-                                        {submitSuccess ? 'Submitting...' : 'Login'}
-                                    </button>
-                                </>
-                            }
-                        </div>
+                            {/* Button */}
+                            <button
+                                type="submit"
+                                disabled={!isFormValid || isSubmitting}
+                                className={`w-full p-2 rounded-md text-white ${
+                                    isFormValid
+                                        ? "bg-gray-700 hover:bg-gray-900"
+                                        : "bg-gray-300 cursor-not-allowed"
+                                }`}
+                            >
+                                {isSubmitting
+                                    ? "Submitting..."
+                                    : isLogin
+                                    ? "Login"
+                                    : "Register"}
+                            </button>
+
+                            {/* Success */}
+                            {submitSuccess && (
+                                <p className="text-green-600 text-sm text-center">
+                                    Submitted successfully
+                                </p>
+                            )}
                     </form>
                 </div>
 
